@@ -1,3 +1,4 @@
+import sys
 from parsing import parsing
 from models import Hub, Connection, Map
 
@@ -8,6 +9,8 @@ def main() -> None:
     except ValueError as e:
         print(f"Error: {e}")
         sys.exit(1)
+
+    # check comments in parser, then do connections
 
     hubs: list[Hub] = []
     hname = "corridorA"
