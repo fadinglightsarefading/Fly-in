@@ -5,3 +5,6 @@ install:
 
 run:
 	python3 fly_in.py
+
+venv:
+	source env/bin/activate

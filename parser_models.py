@@ -1,11 +1,13 @@
 from pydantic import ValidationError
-from models import Hub, Connection, Map
+from models import Hub, Connection
 
 
 class HubParser:
     def __init__(self, nb_drones: int):
         self.nb_drones = nb_drones
         self.hubs: list[Hub] = []
+        self.start_hub: Hub | None = None
+        self.end_hub: Hub | None = None
 
     def init_hubs(self, hub_configs: list[str]) -> None:
         for line in hub_configs:
@@ -22,33 +24,43 @@ class HubParser:
                 raise ValueError(e.errors()[0]["msg"])
 
     def special_hubs(self, config: list[str], metadata: list[str]) -> None:
-        if "start_hub:" in config:
-            zone_name = "start"
-        elif "end_hub:" in config:
-            zone_name = "end"
         try:
-            self.hubs.append(Hub(
-                name=config[1],
-                x=int(config[2]),
-                y=int(config[3]),
-                zone=zone_name,
-                max_drones=self.nb_drones
-            ))
+            x = int(config[2])
+            y = int(config[3])
         except ValueError:
-            raise ValueError("invalid coordinate and/or max_drones configuration")
-        for attribute in metadata:
-            if "color=" in attribute:
-                self.hubs[-1].color=attribute.replace("color=", '')
+            raise ValueError("invalid coordiante configuration")
+        if "start_hub:" in config:
+            self.start_hub = Hub(
+                name=config[1],
+                x=x,
+                y=y,
+                max_drones=self.nb_drones
+            )
+            for attribute in metadata:
+                if "color=" in attribute:
+                    self.start_hub.color=attribute.replace("color=", '')
+        elif "end_hub:" in config:
+            self.end_hub = Hub(
+                name=config[1],
+                x=x,
+                y=y,
+                max_drones=self.nb_drones
+            )
+            for attribute in metadata:
+                if "color=" in attribute:
+                    self.end_hub.color=attribute.replace("color=", '')
 
     def regular_hubs(self, config: list[str], metadata: list[str]) -> None:
         try:
-            self.hubs.append(Hub(
-                name=config[1],
-                x=int(config[2]),
-                y=int(config[3]),
-            ))
+            x = int(config[2])
+            y = int(config[3])
         except ValueError:
             raise ValueError("invalid coordinate configuration")
+        self.hubs.append(Hub(
+            name=config[1],
+            x=x,
+            y=y,
+        ))
         for attribute in metadata:
             if "zone=" in attribute:
                 self.hubs[-1].zone=attribute.replace("zone=", '')
@@ -95,3 +107,43 @@ class HubParser:
             if len(config) > 4:
                 raise ValueError("extra information present in hub configurations")
         return config, metadata
+
+
+class ConnectionParser:
+    def __init__(self):
+        self.connections: list[Connection] = []
+
+    def init_connections(self, connection_configs: list[str]) -> None:
+        for line in connection_configs:
+            line = line.split(' ')
+            if '-' not in line[1]:
+                raise ValueError("missing hyphen in connection configuration") # test
+            if len(line) == 2:
+                connection = line[1].split('-')
+                self.connections.append(Connection(
+                    source=connection[0],
+                    destination=connection[1],
+                ))
+            elif len(line) == 3:
+                self.with_metadata(line)
+            else:
+                raise ValueError("connection metadata invalid") # test
+        
+    def with_metadata(self, line: list[str]) -> None:
+        if (
+                ('[' not in line[2] or ']' not in line[2])
+                or ("max_link_capacity=" not in line[2])
+        ):
+            raise ValueError("invalid connection metadata configuraiton")
+        connection = line[1].split('-')
+        source = connection[0]
+        destination = connection[1]
+        try:
+            max_cap = int(line[2].replace("[max_link_capacity=", '').replace(']', ''))
+        except ValueError:
+            raise ValueError("invalid connection metadata configuration")
+        self.connections.append(Connection(
+            source=source,
+            destination=destination,
+            max_link_capacity=max_cap
+        ))
